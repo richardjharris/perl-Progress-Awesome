@@ -54,6 +54,7 @@ my @MONTH = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
 
 my %STYLES = (
     simple  => \&_style_simple,
+    unicode => \&_style_unicode,
     rainbow => \&_style_rainbow,
 );
 
@@ -374,6 +375,17 @@ sub _style_rainbow {
     my $bar = _unicode_block_bar($fillsize);
     my $len = length $bar;
     $bar = _color_bar($bar, $rainbow, 10);
+    $bar = encode('UTF-8', $bar);
+
+    return $bar . (' ' x ($size - $len));
+}
+
+sub _style_unicode {
+    my ($percent, $size) = @_;
+
+    my $fillsize = ($size * $percent / 100);
+    my $bar = _unicode_block_bar($fillsize);
+    my $len = length $bar;
     $bar = encode('UTF-8', $bar);
 
     return $bar . (' ' x ($size - $len));
