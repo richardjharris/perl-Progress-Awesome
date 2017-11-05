@@ -3,9 +3,11 @@ package Progress::Awesome;
 use strict;
 use warnings;
 use Carp qw(croak);
+use Devel::GlobalDestruction qw(in_global_destruction);
 use Encode qw(encode);
 use Time::HiRes qw(time);
 use Term::ANSIColor qw(colored);
+use Scalar::Util qw(weaken);
 
 use overload
     '++' => \&inc,
@@ -21,6 +23,9 @@ if ($Term::ANSIColor::VERSION < 4.06) {
         $Term::ANSIColor::ATTRIBUTES{"on_ansi$code"} = "48;5;$code";
     }
 }
+
+# Global bar registry for seamless multiple bars at the same time
+our %REGISTRY;
 
 # TODO rate calculation should look at sample times, reject those
 #      that are too close...
@@ -38,13 +43,9 @@ if ($Term::ANSIColor::VERSION < 4.06) {
 # # Use $fh normally, bar updates
 #
 # Multiple bars! Should 'just work' (via behind the scenes magic)
-# my $foo = Progress::Awesome->new({ items => 100, title => 'Foo' });
-# my $bar = Progress::Awesome->new({ items => 100, title => 'Bar' });
-#
-#   Behind the scenes: bars register and unregister globally per filehandle
-#   (weak refs)
-#   You can use terminal sequences 'up' and 'down'
-#   Each update call for any bar updates all of them
+#  - no titles?
+#  - work with regular logs
+#  - try to sync the log size or bar size somehow
 # 
 # Rename 'items' to 'total' perhaps, or something else
 #
@@ -90,8 +91,8 @@ sub new {
     );  
     $args = { %defaults, %$args };
     
-    # Set and validate arguments
-    for my $key (qw(items format log_format log color fh remove title style)) {
+    # Set and validate arguments (fh needs to go first)
+    for my $key (qw(fh items format log_format log color remove title style)) {
         $self->$key(delete $args->{$key}) if exists $args->{$key};
     }
 
@@ -105,6 +106,8 @@ sub new {
 
     # Historic samples uses for rate/ETA calculation
     $self->{_samples} = [];
+
+    _register_bar($self);
     
     # Draw initial bar
     $self->{draw_ok} = 1;
@@ -146,7 +149,7 @@ sub dec {
 
 sub finish {
     my $self = shift;
-    
+
     if (defined $self->items) {
         # Set the bar to maximum
         $self->update($self->items);
@@ -159,12 +162,25 @@ sub finish {
     else {
         print {$self->fh} "\n";
     }
+
+    _unregister_bar($self);
+    
 }
 
 sub DESTROY {
     my $self = shift;
-    # Ignore errors relating to global destruction
-    eval { $self->finish };
+    if (in_global_destruction) {
+        # Unlikely that most method calls will work. The least we can do
+        # is move the cursor past our progress bar(s) so the screen is not
+        # corrupted.
+        if (defined $self && defined $self->{fh}) {
+            my $lines = $REGISTRY{$self->{fh}}->{maxbars};
+            print {$self->{fh}} "\033[${lines}B";
+        }
+    }
+    else {
+        $self->finish;
+    }
 }
 
 sub items {
@@ -282,11 +298,23 @@ sub each_line {
     }
 }
 
+# Draw all progress bars to keep positioning
 sub _redraw {
     my $self = shift;
-    
+    my $drawn = 0;
+    for my $bar (_bars_for($self->fh)) {
+        $drawn += $bar->_redraw_me;
+        print {$self->fh} "\n";
+    }
+    # Move back up
+    print {$self->fh} "\033[" . $drawn . "A" if $drawn;
+} 
+
+sub _redraw_me {
+    my $self = shift;
+
     # Don't draw while setting arguments in constructor
-    return if !$self->{draw_ok};
+    return 0 if !$self->{draw_ok};
 
     my ($max_width, $format, $interval);
     if ($self->_is_interactive) {
@@ -329,6 +357,8 @@ sub _redraw {
     # Draw it
     print {$self->fh} $format;
     $self->fh->flush;
+
+    return 1; # indicate we drew the bar
 }
 
 sub _style_rainbow {
@@ -343,7 +373,7 @@ sub _style_rainbow {
 
     my $to_fill = ($size * $percent / 100);
     my $whole_block = encode('UTF-8', chr(0x2588));  # full block
-    my $last_block = _last_block_from_rounding($to_fill);
+    my $last_block = $percent < 100 ? _last_block_from_rounding($to_fill) : $whole_block;
     $to_fill = int($to_fill);
 
     # Make the rainbow move too
@@ -500,7 +530,8 @@ sub _rate {
 sub _percent {
     my $self = shift;
     return undef if !defined $self->{count} or !defined $self->{items};
-    return ($self->{count} / $self->{items}) * 100;
+    my $pc = ($self->{count} / $self->{items}) * 100;
+    return $pc > 100 ? 100 : $pc;
 }
 
 ## Utilities
@@ -582,8 +613,40 @@ sub _ansi_holding_pattern {
     }
     else {
         # Use a dotted pattern. XXX Maybe should be related to rate?
+        # XXX in genral animating by rate is good for finished bars too
+        # XXX rate does not drop to 0 when finished
         return ['black', 'black', 'black', 'black', 'white'];
     }
+}
+
+# Multiple bar support
+sub _register_bar {
+    my $bar = shift;
+    my $data = $REGISTRY{$bar->fh} ||= {};
+    push @{ $data->{bars} ||= [] }, $bar;
+    if (!defined $data->{maxbars} or $data->{maxbars} < @{$data->{bars}}) {
+        $data->{maxbars} = @{$data->{bars}};
+    }
+}
+
+sub _unregister_bar {
+    my $bar = shift;
+    my $data = $REGISTRY{$bar->fh};
+
+    @{$data->{bars}} = grep { $_ != $bar } @{$data->{bars}};
+
+    # Are we the last bar? Move the cursor to the bottom of the bars.
+    if (@{$data->{bars}} == 0) {
+        print {$bar->fh} "\033[" . $data->{maxbars} . "B";
+        $bar->fh->flush;
+    }
+}
+
+sub _bars_for {
+    my $fh = shift;
+    return if !defined $fh;
+    return if !exists $REGISTRY{$fh};
+    return @{ $REGISTRY{$fh}{bars} || [] };
 }
 
 1;
