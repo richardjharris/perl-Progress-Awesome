@@ -7,7 +7,7 @@ use Devel::GlobalDestruction qw(in_global_destruction);
 use Encode qw(encode);
 use Time::HiRes qw(time);
 use Term::ANSIColor qw(colored);
-use Scalar::Util qw(weaken);
+use Scalar::Util qw(refaddr);
 
 use overload
     '++' => \&inc,
@@ -643,7 +643,7 @@ sub _unregister_bar {
     my $bar = shift;
     my $data = $REGISTRY{$bar->{fh}};
 
-    @{$data->{bars}} = grep { $_ != $bar } @{$data->{bars}};
+    @{$data->{bars}} = grep { refaddr $_ ne refaddr $bar } @{$data->{bars}};
 
     # Are we the last bar? Move the cursor to the bottom of the bars.
     if (@{$data->{bars}} == 0) {
