@@ -38,12 +38,7 @@ our %REGISTRY;
 #           :eta should have a sensible default min width
 #           :rate also
 #
-# Proxy reader:
-# my $fh = $bar->proxy($fh);
-# # Use $fh normally, bar updates
-#
 # Multiple bars! Should 'just work' (via behind the scenes magic)
-#  - no titles?
 #  - work with regular logs
 #  - try to sync the log size or bar size somehow
 # 
@@ -85,7 +80,7 @@ sub new {
         color => 1,
         remove => 0,
         items => 0,
-        title => '',
+        title => undef,
         count => 0,
         style => 'simple',
     );  
@@ -374,32 +369,42 @@ sub _style_rainbow {
         $rainbow = _ansi_holding_pattern();
     }
 
-    my $to_fill = ($size * $percent / 100);
-    my $whole_block = encode('UTF-8', chr(0x2588));  # full block
-    my $last_block = $percent < 100 ? _last_block_from_rounding($to_fill) : $whole_block;
-    $to_fill = int($to_fill);
+    my $fillsize = ($size * $percent / 100);
 
-    # Make the rainbow move too
-    my $t = time * 10;
+    my $bar = _unicode_block_bar($fillsize);
+    my $len = length $bar;
+    $bar = _color_bar($bar, $rainbow, 10);
+    $bar = encode('UTF-8', $bar);
 
-    my $bar = join('', map {
-        my $block = $_ == $to_fill ? $last_block : $whole_block;
-
-        colored($block, $rainbow->[($_ + $t) % @$rainbow])
-    } (1..$to_fill));
-
-    $bar .= ' ' x ($size - $to_fill);
-    return $bar;
+    return $bar . (' ' x ($size - $len));
 }
 
-sub _last_block_from_rounding {
-    my $val = shift;
-    my $float = $val - int($val);
-    return ' ' if $float == 0;
+sub _unicode_block_bar {
+    my $fillsize = shift;
+    return '' if $fillsize == 0;
+
+    my $intpart = int($fillsize);
+    my $floatpart = $fillsize - $intpart;
+
+    my $whole_block = chr(0x2588);  # full block
 
     # Block range is U+2588 (full block) .. U+258F (left one eighth block)
-    my $offset = int((1 - $float) * 8);
-    return encode('UTF-8', chr(0x2588 + $offset));
+    my $last_block = $floatpart == 0 ? '' : chr(0x2588 + int((1 - $floatpart) * 8));
+
+    return ($whole_block x $intpart) . $last_block;
+}
+
+sub _color_bar {
+    my ($bar, $swatch, $speed) = @_;
+
+    my $t = time * $speed;
+
+    return join('', map {
+        colored(
+            substr($bar, $_ - 1, 1),
+            $swatch->[($_ + $t) % @$swatch],
+        )
+    } (1..length($bar)));
 }
 
 sub _style_simple {
