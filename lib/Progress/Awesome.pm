@@ -501,6 +501,8 @@ sub _eta {
     my $rate = $self->_rate;
     return 'unknown' if !defined $rate or $rate <= 0;
 
+    return 'finished' if $self->{count} >= $self->{items};
+
     my $duration = ($self->{items} - $self->{count}) / $rate;
     return _human_readable_duration($duration);
 }
