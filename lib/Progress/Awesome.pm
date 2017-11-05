@@ -90,9 +90,11 @@ sub new {
         style => 'simple',
     );  
     $args = { %defaults, %$args };
+
+    $self->{fh} = delete $args->{fh};
     
-    # Set and validate arguments (fh needs to go first)
-    for my $key (qw(fh items format log_format log color remove title style)) {
+    # Set and validate arguments
+    for my $key (qw(items format log_format log color remove title style)) {
         $self->$key(delete $args->{$key}) if exists $args->{$key};
     }
 
@@ -159,10 +161,8 @@ sub finish {
         # Destroy the bar, assuming nobody has printed anything in the interim
         $self->_wipe_current_line;
     }    
-    else {
-        print {$self->fh} "\n";
-    }
 
+    # TODO self->remove behaviour will change here too
     _unregister_bar($self);
     
 }
@@ -203,7 +203,7 @@ for my $param (qw(format log_format)) {
     };
 }
 
-for my $param (qw(log color remove title fh)) {
+for my $param (qw(log color remove title)) {
     no strict 'refs';
     *{$param} = sub {
         my ($self, $new) = @_;
@@ -212,6 +212,8 @@ for my $param (qw(log color remove title fh)) {
         $self->_redraw;
     };
 }
+
+sub fh { shift->{fh} }
 
 sub style {
     my ($self, $style) = @_;
@@ -302,7 +304,7 @@ sub each_line {
 sub _redraw {
     my $self = shift;
     my $drawn = 0;
-    for my $bar (_bars_for($self->fh)) {
+    for my $bar (_bars_for($self->{fh})) {
         $drawn += $bar->_redraw_me;
         print {$self->fh} "\n";
     }
@@ -320,7 +322,7 @@ sub _redraw_me {
     if ($self->_is_interactive) {
         # Drawing a progress bar
         $max_width = $self->_terminal_width;
-        $format = "\r" . $self->format;
+        $format = $self->format;
     }
     else {
         # Outputting log events
@@ -328,11 +330,12 @@ sub _redraw_me {
     }
     
     # Determine draw interval and don't print if recent enough
+    # (TODO)
     
     # Draw the components
     $format =~ s/:(\w+)/$self->_redraw_component($1)/ge;
-    
-    if ($self->{title}) {
+
+    if (defined $self->{title}) {
         $format = $self->{title} . ": " . $format;
     }
  
@@ -624,7 +627,7 @@ sub _ansi_holding_pattern {
 # Multiple bar support
 sub _register_bar {
     my $bar = shift;
-    my $data = $REGISTRY{$bar->fh} ||= {};
+    my $data = $REGISTRY{$bar->{fh}} ||= {};
     push @{ $data->{bars} ||= [] }, $bar;
     if (!defined $data->{maxbars} or $data->{maxbars} < @{$data->{bars}}) {
         $data->{maxbars} = @{$data->{bars}};
@@ -633,14 +636,13 @@ sub _register_bar {
 
 sub _unregister_bar {
     my $bar = shift;
-    my $data = $REGISTRY{$bar->fh};
+    my $data = $REGISTRY{$bar->{fh}};
 
     @{$data->{bars}} = grep { $_ != $bar } @{$data->{bars}};
 
     # Are we the last bar? Move the cursor to the bottom of the bars.
     if (@{$data->{bars}} == 0) {
-        print {$bar->fh} "\033[" . $data->{maxbars} . "B";
-        $bar->fh->flush;
+        print {$bar->{fh}} "\033[" . $data->{maxbars} . "B";
     }
 }
 
