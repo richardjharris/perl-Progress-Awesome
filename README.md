@@ -6,25 +6,27 @@
 
 # SYNOPSIS
 
-    my $p = Progress::Awesome->new({
-       items => 100,
-       format => '[:bar] :count/:items :eta :rate',
-       title => 'Woooop',
-    });
-    $p->inc;
-    $p->update($value);
-    $p->finish;
+```perl
+my $p = Progress::Awesome->new({
+   items => 100,
+   format => '[:bar] :count/:items :eta :rate',
+   title => 'Woooop',
+});
+$p->inc;
+$p->update($value);
+$p->finish;
 
-    $p->each_item(\@items, sub { 
-           # ...
-    });
+$p->each_item(\@items, sub { 
+       # ...
+});
 
-    # Quicker!
-    my $p = Progress::Awesome->new(100);
-    for (1..100) {
-       do_stuff();
-       $p++;
-    }
+# Quicker!
+my $p = Progress::Awesome->new(100);
+for (1..100) {
+   do_stuff();
+   $p++;
+}
+ ```
 
 # DESCRIPTION
 
