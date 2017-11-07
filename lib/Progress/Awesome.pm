@@ -27,6 +27,12 @@ if ($Term::ANSIColor::VERSION < 4.06) {
 # Global bar registry for seamless multiple bars at the same time
 our %REGISTRY;
 
+# Basically every call
+my $REDRAW_INTERVAL = 0;
+
+# Don't log a crazy amount of times
+my $LOG_INTERVAL = 300;
+
 my $DEFAULT_TERMINAL_WIDTH = 80;
 my %FORMAT_STRINGS = map { $_ => 1 } qw(
     : bar ts eta rate bytes percent done left total title spacer
@@ -87,12 +93,13 @@ sub new {
 
     # Historic samples used for rate/ETA calculation
     $self->{_samples} = [];
+    $self->{_next_draw} = -1;
 
     _register_bar($self);
     
     # Draw initial bar
     $self->{draw_ok} = 1;
-    $self->_redraw;
+    $self->_force_redraw;
     
     return $self;
 }
@@ -139,6 +146,7 @@ sub finish {
     if (defined $self->{total}) {
         # Set the bar to maximum
         $self->update($self->{total});
+        $self->_force_redraw;
     }
     
     if ($self->remove) {
@@ -221,13 +229,26 @@ sub style {
     $self->_redraw;
 }
 
+sub _force_redraw {
+    my $self = shift;
+    $self->_redraw(1);
+}
+
 # Draw all progress bars to keep positioning
 sub _redraw {
-    my $self = shift;
+    my ($self, $force) = @_;
+
     my $drawn = 0;
     for my $bar (_bars_for($self->{fh})) {
-        $drawn += $bar->_redraw_me;
+        my $lines += $bar->_redraw_me($force);
+
+        if ($lines == -1) {
+            # This indicates we didn't draw as not enough time has passed
+            return;
+        }
+
         print {$self->fh} "\n";
+        $drawn += $lines;
     }
     # Move back up
     unless ($self->_logging_mode) {
@@ -236,19 +257,22 @@ sub _redraw {
 } 
 
 sub _redraw_me {
-    my $self = shift;
+    my ($self, $force) = @_;
 
     # Don't draw while setting arguments in constructor
     return 0 if !$self->{draw_ok};
+    return -1 if time < $self->{_next_draw} && !$force;
 
     my ($max_width, $format, $interval);
     if ($self->_logging_mode) {
         $format = $self->log_format . "\n";
+        $self->{_next_draw} = time + $LOG_INTERVAL;
     }
     else {
         # Drawing a progress bar
         $max_width = $self->_terminal_width;
         $format = $self->format;
+        $self->{_next_draw} = time + $REDRAW_INTERVAL;
     }
     
     # Determine draw interval and don't print if recent enough

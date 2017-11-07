@@ -2,9 +2,14 @@
 
 - Don't update too often
 
+- Don't use colour in logging mode
+  - if bar is included, give it some sensible width
+
 - Bytes, items - use predictable sf (and width)
 
-- Same with :left, :total, :done - use SF in the same way (maybe?)
+- Same with :left, :total, :done - use units in the same way (maybe?)
+
+- Rename to value / max_value ?
 
 Tests?
 
