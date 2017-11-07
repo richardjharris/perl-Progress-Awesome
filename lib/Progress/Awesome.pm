@@ -54,7 +54,7 @@ sub new {
         $args = { %$args, %{$_[0]} };
     }
     else {
-        $args = { %$args, @{$_[0]} };
+        $args = { %$args, @_ };
     }
     
     # Apply defaults
