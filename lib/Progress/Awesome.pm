@@ -29,7 +29,7 @@ our %REGISTRY;
 
 my $DEFAULT_TERMINAL_WIDTH = 80;
 my %FORMAT_STRINGS = map { $_ => 1 } qw(
-    : bar ts eta rate bytes percent done left total title
+    : bar ts eta rate bytes percent done left total title spacer
 );
 my $MAX_SAMPLES = 10;
 my @MONTH = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
@@ -261,46 +261,63 @@ sub _redraw_me {
     if (defined $self->{title} && !$title_in_format) {
         $format = $self->{title} . ": " . $format;
     }
- 
-    # Work out format length. bar length, and fill in bar
-    my $drew_bar = 0;
-
-    if ($format =~ /:bar/) {
-        my $remaining_space = $max_width - length($format) + length(':bar');
-        if ($remaining_space >= 1) {
-            my $bar = $self->{style}->($self->_percent, $remaining_space);
-            $format =~ s/:bar/$bar/g; 
-            $drew_bar = 1;
-        }
-        else {
-            # It's already too big
-            $format =~ s/:bar//g;
-        }
-    }
-
-    if (!$drew_bar && defined $max_width) {
-        # XXX this needs to account for ANSI codes + Unicode double-width
-        if (length($format) > $max_width) {
-            $format = substr($format, 0, $max_width);
-        }
-        else {
-            $format .= ' ' x ($max_width - length($format));
-        }
-    }
     
-    # Draw it
-    print {$self->fh} $format;
+    my @lines = split /\n/, $format;
+    my $idx = 0;
+
+    for my $format_line (@lines) {
+        # Work out format length, spacer/bar length, and fill in spacer/bar
+        my $drew_stretchy = 0;
+
+        if ($format_line =~ /:bar/) {
+            my $remaining_space = $max_width - length($format_line) + length(':bar');
+            if ($remaining_space >= 1) {
+                my $bar = $self->{style}->($self->_percent, $remaining_space);
+                $format_line =~ s/:bar/$bar/g; 
+                $drew_stretchy = 1;
+            }
+            else {
+                # It's already too big
+                $format_line =~ s/:bar//g;
+            }
+        }
+        elsif ($format_line =~ /:spacer/) {
+            my $remaining_space = $max_width - length($format_line) + length(':spacer');
+            if ($remaining_space >= 1) {
+                my $spacer = " " x $remaining_space;
+                $format_line =~ s/:spacer/$spacer/g; 
+                $drew_stretchy = 1;
+            }
+            else {
+                # It's already too big
+                $format_line =~ s/:spacer//g;
+            }
+        }
+
+        if (!$drew_stretchy && defined $max_width) {
+            # XXX this needs to account for ANSI codes + Unicode double-width
+            if (length($format_line) > $max_width) {
+                $format_line = substr($format_line, 0, $max_width);
+            }
+            else {
+                $format_line .= ' ' x ($max_width - length($format_line));
+            }
+        }
+        # Draw it
+        print {$self->fh} $format_line;
+        print {$self->fh} "\n" unless $idx++ == $#lines;
+    }
     $self->fh->flush;
 
-    return 1; # indicate we drew the bar
+    return $idx; # indicate we drew the bar
 }
     
 sub _redraw_component {
     my ($self, $field) = @_;
 
-    if ($field eq 'bar') {
-        # Skip :bar as this needs to go last
-        return ':bar';
+    if ($field eq 'bar' or $field eq 'spacer') {
+        # Skip as these needs to go last
+        return ":$field";
     }
     elsif ($field eq ':') {
         # Literal ':'
@@ -626,11 +643,14 @@ sub _bars_for {
 
 =head1 SYNOPSIS
 
- my $p = Progress::Awesome->new(total => 100, style => 'rainbow');
+ my $p = Progress::Awesome->new(100, style => 'rainbow');
  for my $item (1..100) {
      do_some_stuff();
      $p->inc;
  }
+
+ # Multiline progress bars
+ my $p = Progress::Awesome(100, format => ":bar\n:left/:total :spacer ETA :eta");
 
 =head1 DESCRIPTION
 
@@ -703,7 +723,7 @@ Total number of items to be processed. (items, bytes, files, etc.)
 =item format (default: '[:bar] :done/:total :eta :rate')
 
 Specify a format for the progress bar (see L</FORMATS> below).
-The C<:bar> part will fill to all available space.
+C<:bar> or C<:spacer> parts will fill to all available space.
 
 =item style (optional)
 
@@ -768,13 +788,21 @@ Decrement the progress bar by this many items, or 1 if omitted.
 
 =head1 FORMATS
 
-Format strings may contain any of the below fields:
+A convenient way to specify what fields go where in your progress bar or log output.
+
+Format strings may span multiple lines, and may contain any of the below fields:
 
 =over
 
 =item :bar
 
 The progress bar. Expands to fill all available space not used by other fields.
+
+=item :spacer
+
+Expands to fill all available space. Items before the spacer will be aligned to
+the left of the screen, and items after the spacer will be aligned to the right.
+In this respect it's like a progress bar that's invisible.
 
 =item ::
 
