@@ -18,3 +18,5 @@ For 2.0...
  - Handle reversing bars properly
  - Better rate calculation
  - other TODOs like bars disappearing at random times or coming back
+
+ - finish() doesn't actually block changes?

@@ -208,74 +208,6 @@ sub style {
     $self->_redraw;
 }
 
-sub each_item {
-    my ($self, $ref, $sub) = @_;
-    my $reftype = ref $ref;
-    if ($reftype eq 'ARRAY') {
-        $self->items(scalar @$ref);
-        for my $item (@$ref) {
-            $sub->($item);
-            $self->inc;
-        }
-        $self->finish;
-    }
-    elsif ($reftype eq 'HASH') {
-        $self->items(scalar keys %$ref);
-        for my $key (keys %$ref) {
-            $sub->($key, $ref->{$key});
-            $self->inc;
-        }
-        $self->finish;
-    }
-    else {
-        croak "each_item: unsupported value (should be arrayref or hashref)";
-    }
-}
-
-sub each_line {
-    my $sub = pop @_;
-    my ($self, $file, $extra) = @_;
-    defined ref $file or croak "each_line: filename is undefined";
-    
-    if (ref $file eq '') {
-        my $encoding = $extra || ':raw';
-    
-        # We have a filename
-        my $size = -s $file;
-        # size will be 0 for /proc/self/fd/XX (e.g. subshell via <(...)) or
-        # undefined for STDIN
-        $self->items($size) if $size;
-        open my $fh, "<$encoding", $file or croak "each_line: unable to open '$file': $!";  
-        while (<$fh>) {
-            my $line = shift;
-            $sub->($line);
-            my $pos = tell $fh;
-            if ($pos == -1) {
-                # STDIN/pipe always returns -1, so this is the best we can do.
-                $self->inc(bytes::length($line));
-            }
-            else {
-                # Most other filehandles (including /proc/self/fd...) work fine
-                $self->update($pos);
-            }
-        }
-        $self->finish;
-        close $file;
-    }
-    elsif (ref $file eq 'GLOB') {
-        # We have a glob
-        my $items = $extra;
-        $self->items($items);
-        while (<$file>) {
-            $sub->($_);    
-        }
-        $self->finish;        
-    }
-    else {
-        croak "each_line: unsupported value (should be filename as scalar, or file handle)";
-    }
-}
-
 # Draw all progress bars to keep positioning
 sub _redraw {
     my $self = shift;
@@ -668,11 +600,6 @@ sub _bars_for {
  });
  $p->inc;
  $p->update($value);
- $p->finish;
-
- $p->each_item(\@items, sub { 
-	# ...
- });
 
  # Quicker!
  my $p = Progress::Awesome->new(100);
@@ -715,11 +642,6 @@ Can be incremented using C<++> or C<+=> if you like.
 
 =item *
 
-Handy C<each_item> and C<each_line> functions loop through items/filehandles while
-updating progress.
-
-=item *
-
 Works fine if max is undefined, set halfway through, or updated halfway through.
 
 =item *
@@ -732,7 +654,7 @@ Colours!!
 
 =item *
 
-Multiple process bars at once 'just works'.
+Multiple process bars at once 'just work'.
 
 =back
 
@@ -816,21 +738,6 @@ arguments, returns the number of items.
 =head2 dec ( value )
 
 Decrement the progress bar (if needed).
-
-=head2 each_item ( ref, function )
-
-Calls C<function> for each item in C<ref>. The function will be passed each item (if an array ref)
-or each key and value (if a hash ref). The progress bar will be updated to reflect the progress
-as each item's callback is executed.
-
-=head2 each_line ( filename, [encoding], function )
-
-=head2 each_line ( filehandle, [items], function )
-
-Calls C<function> for each line in the given file. If the first argument is a filename, the progress bar
-will automatically update as the file is traversed (like the C<pv(1)> tool) based on the byte count.
-If the first argument is a filehandle, only rate and items processed can be shown unless C<items> is
-also defined.
 
 =head1 FORMATS
 
