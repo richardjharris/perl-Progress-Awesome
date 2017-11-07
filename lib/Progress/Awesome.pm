@@ -28,7 +28,9 @@ if ($Term::ANSIColor::VERSION < 4.06) {
 our %REGISTRY;
 
 my $DEFAULT_TERMINAL_WIDTH = 80;
-my %FORMAT_STRINGS = map { $_ => 1 } qw(: bar ts count items max eta rate percent);
+my %FORMAT_STRINGS = map { $_ => 1 } qw(
+    : bar ts eta rate bytes percent done left total
+);
 my $MAX_SAMPLES = 10;
 my @MONTH = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
 
@@ -54,27 +56,28 @@ sub new {
     # Apply defaults
     my %defaults = (
         fh => \*STDERR,
-        format => '[:bar] :count/:items :eta :rate',
-        log_format => '[:ts] :percent% :count/:items :eta :rate',
+        format => '[:bar] :done/:total :eta :rate',
+        log_format => '[:ts] :percent% :done/:total :eta :rate',
         log => 1,
         color => 1,
         remove => 0,
         items => 0,
         title => undef,
-        count => 0,
-        style => 'simple',
+        style => 'rainbow',
+        done => 0,
+        total => undef,
     );  
     $args = { %defaults, %$args };
 
     $self->{fh} = delete $args->{fh};
     
     # Set and validate arguments
-    for my $key (qw(items format log_format log color remove title style)) {
+    for my $key (qw(total format log_format log color remove title style)) {
         $self->$key(delete $args->{$key}) if exists $args->{$key};
     }
 
-    if (exists $args->{count}) {
-        $self->update(delete $args->{count});
+    if (exists $args->{done}) {
+        $self->update(delete $args->{done});
     }
 
     if (keys %$args) {
@@ -98,17 +101,24 @@ sub inc {
     
     @_ == 1 and $amount = 1;
     defined $amount or croak "inc: undefined amount";
-    
-    $self->{count} += $amount;
-    $self->_add_sample;
-    $self->_redraw;
+
+    $self->update($self->{done} + $amount);
 }
 
 sub update {
     my ($self, $count) = @_;
     defined $count or croak "update: undefined count";
 
-    $self->{count} = $count;
+    if (defined $self->{total} && $count > $self->{total}) {
+        $self->{done} = $self->{total};
+    }
+    elsif ($count < 0) {
+        $self->{done} = 0;
+    }
+    else {
+        $self->{done} = $count;
+    }
+
     $self->_add_sample;
     $self->_redraw;
 }
@@ -119,9 +129,7 @@ sub dec {
     @_ == 1 and $amount = 1;
     defined $amount or croak "dec undefined amount";
 
-    $self->{count} -= $amount;
-    $self->_add_sample;
-    $self->_redraw;
+    $self->update($self->{done} - $amount);
 }
 
 sub finish {
@@ -158,13 +166,18 @@ sub DESTROY {
     }
 }
 
-sub items {
-    my ($self, $items) = @_;
-    @_ == 1 and return $self->{items};
-    if (defined $items) {
-        $items >= 0 or croak "items: items must be undefined or positive (>=0)";
+sub total {
+    my ($self, $total) = @_;
+    @_ == 1 and return $self->{total};
+    if (defined $total) {
+        $total >= 0 or croak "total: total must be undefined or positive (>=0)";
     }
-    $self->{items} = $items;
+    $self->{total} = $total;
+
+    if ($self->{done} > $total) {
+        $self->{done} = $total;
+    }
+
     $self->_redraw;
 }
 
@@ -288,11 +301,14 @@ sub _redraw_component {
         $month = $MONTH[$month] or croak "_redraw_component: unknown month $month ??;";
         return sprintf('%s %02d %02d:%02d:%02d', $month, $day, $hour, $min, $sec);
     }
-    elsif ($field eq 'count') {
-        return defined $self->{count} ? $self->{count} : '-';
+    elsif ($field eq 'done') {
+        return $self->{done};
     }
-    elsif ($field eq 'items' or $field eq 'max') {
-        return defined $self->{items} ? $self->{items} : '-';
+    elsif ($field eq 'left') {
+        return defined $self->{total} ? ($self->{total} - $self->{done}) : '-';
+    }
+    elsif ($field eq 'total' or $field eq 'max') {
+        return defined $self->{total} ? $self->{total} : '-';
     }
     elsif ($field eq 'eta') {
         return $self->_eta;
@@ -348,7 +364,7 @@ sub _is_interactive {
 sub _add_sample {
     my $self = shift;
     my $s = $self->{_samples};
-    unshift @$s, [$self->{count}, time];
+    unshift @$s, [$self->{done}, time];
     pop @$s if @$s > $MAX_SAMPLES;
 }
 
@@ -360,16 +376,16 @@ sub _eta {
     my $rate = $self->_rate;
     return 'unknown' if !defined $rate or $rate <= 0;
 
-    return 'finished' if $self->{count} >= $self->{items};
+    return 'finished' if $self->{done} >= $self->{total};
 
-    my $duration = ($self->{items} - $self->{count}) / $rate;
+    my $duration = ($self->{total} - $self->{done}) / $rate;
     return _human_readable_duration($duration);
 }
 
 # Return rate for current progress
 sub _rate {
     my $self = shift;
-    return if !defined $self->{items};
+    return if !defined $self->{total};
 
     my $s = $self->{_samples};
     return if @$s < 2;
@@ -390,8 +406,8 @@ sub _rate {
 # Return current percentage complete, or undef if unknown
 sub _percent {
     my $self = shift;
-    return undef if !defined $self->{count} or !defined $self->{items};
-    my $pc = ($self->{count} / $self->{items}) * 100;
+    return undef if !defined $self->{total};
+    my $pc = ($self->{done} / $self->{total}) * 100;
     return $pc > 100 ? 100 : $pc;
 }
 
@@ -596,7 +612,7 @@ sub _bars_for {
 
 =head1 SYNOPSIS
 
- my $p = Progress::Awesome->new(items => 100, style => 'rainbow');
+ my $p = Progress::Awesome->new(total => 100, style => 'rainbow');
  for my $item (1..100) {
      do_some_stuff();
      $p->inc;
@@ -662,11 +678,11 @@ Create a new progress bar. (Arguments may also be passed as a hashref)
 
 =over
 
-=item items (optional)
+=item total (optional)
 
-Number of items in the progress bar.
+Number of total in the progress bar.
 
-=item format (default: '[:bar] :count/:items :eta :rate')
+=item format (default: '[:bar] :done/:total :eta :rate')
 
 Specify a format for the progress bar (see L</FORMATS> below).
 The C<:bar> part will fill to all available space.
@@ -681,7 +697,7 @@ for the bar.
 
 Optional bar title.
 
-=item log_format (default: '[:ts] :percent% :count/:items :eta :rate')
+=item log_format (default: '[:ts] :percent% :done/:total :eta :rate')
 
 Specify a format for log output used when the script is run non-interactively.
 
@@ -701,9 +717,9 @@ If set to 1, remove the progress bar after completion via C<finish>.
 
 The filehandle to output to.
 
-=item count (default: 0)
+=item done (default: 0)
 
-Starting count.
+Starting number of items done.
 
 =back
 
@@ -721,10 +737,10 @@ Increment progress bar by this many items, or 1 if omitted.
 Set the progress bar to maximum. Any further updates will not take effect. Happens automatically
 when the progress bar goes out of scope.
 
-=item items ( [value] )
+=item total ( [value] )
 
-Updates the number of items for the progress bar. May be set to undef if unknown. With zero
-arguments, returns the number of items.
+Updates the total number of items. May be set to undef if unknown. With zero arguments,
+returns the current total.
 
 =item dec ( [value] )
 
@@ -750,13 +766,17 @@ Literal ':'
 
 Current timestamp (month, day, time) - intended for logging mode.
 
-=item :count
+=item :done
 
-Current item count.
+Number of items that have been completed.
 
-=item :items
+=item :left
 
-Maximum number of items
+Number of items remaining
+
+=item :total
+
+Maximum number of items.
 
 =item :eta
 
