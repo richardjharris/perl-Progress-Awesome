@@ -43,14 +43,18 @@ my %STYLES = (
 sub new {
     my $class = shift;
     my $self = bless {}, $class;
-    
+
     # Map ctor arguments to hashref
-    my $args;
+    my $args = {};
+    if (@_ >= 1 && Scalar::Util::looks_like_number($_[0])) {
+        $args->{total} = shift;
+    }
+
     if (@_ == 1 && ref $_[0] && ref $_[0] eq 'HASH') {
-        $args = $_[0];
+        $args = { %$args, %{$_[0]} };
     }
     else {
-        $args = { @_ };
+        $args = { %$args, @{$_[0]} };
     }
     
     # Apply defaults
@@ -61,7 +65,6 @@ sub new {
         log => 1,
         color => 1,
         remove => 0,
-        items => 0,
         title => undef,
         style => 'rainbow',
         done => 0,
@@ -70,18 +73,16 @@ sub new {
     $args = { %defaults, %$args };
 
     $self->{fh} = delete $args->{fh};
+
+    $self->update(delete $args->{done}) if exists $args->{done};
     
     # Set and validate arguments
     for my $key (qw(total format log_format log color remove title style)) {
         $self->$key(delete $args->{$key}) if exists $args->{$key};
     }
 
-    if (exists $args->{done}) {
-        $self->update(delete $args->{done});
-    }
-
     if (keys %$args) {
-        croak "Invalid argument: " . join(', ', sort keys %$args);
+        croak __PACKAGE__ . "::new(): invalid argument " . join(', ', map { "'$_'" } sort keys %$args);
     }
 
     # Historic samples used for rate/ETA calculation
@@ -135,9 +136,9 @@ sub dec {
 sub finish {
     my $self = shift;
 
-    if (defined $self->items) {
+    if (defined $self->{total}) {
         # Set the bar to maximum
-        $self->update($self->items);
+        $self->update($self->{total});
     }
     
     if ($self->remove) {
@@ -174,7 +175,7 @@ sub total {
     }
     $self->{total} = $total;
 
-    if ($self->{done} > $total) {
+    if (defined $total && $self->{done} > $total) {
         $self->{done} = $total;
     }
 
@@ -587,7 +588,7 @@ sub _register_bar {
 
 sub _unregister_bar {
     my $bar = shift;
-    my $data = $REGISTRY{$bar->{fh}};
+    my $data = $REGISTRY{$bar->{fh}} or return;
 
     @{$data->{bars}} = grep { refaddr $_ ne refaddr $bar } @{$data->{bars}};
 
