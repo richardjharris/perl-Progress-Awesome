@@ -47,9 +47,8 @@ sub new {
     if (@_ == 1 && ref $_[0] && ref $_[0] eq 'HASH') {
         $args = $_[0];
     }
-    elsif (@_ >= 1) {
-        my $items = shift;
-        $args = { items => $items, @_ };
+    else {
+        $args = { @_ };
     }
     
     # Apply defaults
@@ -481,6 +480,10 @@ sub _check_format {
         exists $FORMAT_STRINGS{$1} or croak "$param: invalid format string ':$1'";
     }
 
+    if (($format =~ /:bar/) > 1) {
+        croak "$param: contains more than one bar";
+    }
+
     return $format;
 }
 
@@ -593,19 +596,10 @@ sub _bars_for {
 
 =head1 SYNOPSIS
 
- my $p = Progress::Awesome->new({
-    items => 100,
-    format => '[:bar] :count/:items :eta :rate',
-    title => 'Woooop',
- });
- $p->inc;
- $p->update($value);
-
- # Quicker!
- my $p = Progress::Awesome->new(100);
- for (1..100) {
-    do_stuff();
-    $p++;
+ my $p = Progress::Awesome->new(items => 100, style => 'rainbow');
+ for my $item (1..100) {
+     do_some_stuff();
+     $p->inc;
  }
 
 =head1 DESCRIPTION
@@ -660,14 +654,11 @@ Multiple process bars at once 'just work'.
 
 =head1 METHODS
 
-=head2 new ( items, %args )
+=over
 
-=head2 new ( \%args )
+=item new ( %args )
 
-Create a new progress bar. It is convenient to pass the number of items and any
-optional arguments, although you may also be explicit and pass a hashref.
-
-XXX not sure about this!
+Create a new progress bar. (Arguments may also be passed as a hashref)
 
 =over
 
@@ -677,8 +668,8 @@ Number of items in the progress bar.
 
 =item format (default: '[:bar] :count/:items :eta :rate')
 
-Specify a format for the progress bar (see L<FORMATS> below). The C<:bar> part will fill to
-all available space.
+Specify a format for the progress bar (see L</FORMATS> below).
+The C<:bar> part will fill to all available space.
 
 =item style (optional)
 
@@ -716,36 +707,80 @@ Starting count.
 
 =back
 
-=head2 update ( value )
+=item update ( value )
 
 Update the progress bar to the specified value. If undefined, the progress bar will go into
 a spinning/unknown state.
 
-=head2 inc ( [value] )
+=item inc ( [value] )
 
 Increment progress bar by this many items, or 1 if omitted.
 
-=head2 finish
+=item finish
 
 Set the progress bar to maximum. Any further updates will not take effect. Happens automatically
 when the progress bar goes out of scope.
 
-=head2 items ( [VALUE] )
+=item items ( [value] )
 
 Updates the number of items for the progress bar. May be set to undef if unknown. With zero
 arguments, returns the number of items.
 
-=head2 dec ( value )
+=item dec ( [value] )
 
-Decrement the progress bar (if needed).
+Decrement the progress bar by this many items, or 1 if omitted.
+
+=back
 
 =head1 FORMATS
 
-Blah
+Format strings may contain any of the below fields:
+
+=over
+
+=item :bar
+
+The progress bar. Expands to fill all available space not used by other fields.
+
+=item ::
+
+Literal ':'
+
+=item :ts
+
+Current timestamp (month, day, time) - intended for logging mode.
+
+=item :count
+
+Current item count.
+
+=item :items
+
+Maximum number of items
+
+=item :eta
+
+Estimated time until progress bar completes.
+
+=item :rate
+
+Number of items being processed per second.
+
+=item :bytes
+
+Number of bytes being processed per second (expressed as KB, MB, GB etc. as needed)
+
+=item :percent
+
+Current percent completion (without % sign)
+
+=back
 
 =head1 REPORTING BUGS
 
-TBD
+It's early days for this module so bugs are possible and feature requests are warmly
+welcomed. We use L<Github Issues|https://github.com/richardjharris/perl-Progress-Awesome/issues>
+for reports.
 
 =head1 AUTHOR
 
@@ -753,9 +788,8 @@ Richard Harris richardjharris@gmail.com
 
 =head1 COPYRIGHT
 
-Copyright (c) 2017 Richard Harris.  This program is
-free software; you can redistribute it and/or modify it under the same terms
-as Perl itself.
+Copyright (c) 2017 Richard Harris.  This program is free software; you can
+redistribute it and/or modify it under the same terms as Perl itself.
 
 =cut
 

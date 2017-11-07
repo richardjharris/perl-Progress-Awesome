@@ -1,10 +1,7 @@
 - Turn into real distribution
-- POD syntax highlight
 
 - Clean up API
   - items, count, ???
-  - remove each_line api
-  - standard API: (items, name, \%args)
   - default style to rainbow?
 
 - Don't update too often
@@ -20,3 +17,7 @@ For 2.0...
  - other TODOs like bars disappearing at random times or coming back
 
  - finish() doesn't actually block changes?
+
+ - multiline bars (e.g. [bar] then items on left, eta on right)
+  - would involve :space or similar object that expands to fill
+    all space

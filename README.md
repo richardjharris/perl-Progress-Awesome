@@ -1,32 +1,18 @@
-# HEAD
+**Progress::Awesome** - an awesome progress bar that just works
 
-    Progress::Awesome - an awesome progress bar that just works
-    
+## Example
+
 ![Animated gif of progress bar in action](https://i.imgur.com/g2MeL7q.gif)
 
-# SYNOPSIS
+```perl
+my $p = Progress::Awesome->new(items => 100, style => 'rainbow');
+for my $item (1..100) {
+    do_some_stuff();
+    $p++;
+}
+```
 
-    my $p = Progress::Awesome->new({
-       items => 100,
-       format => '[:bar] :count/:items :eta :rate',
-       title => 'Woooop',
-    });
-    $p->inc;
-    $p->update($value);
-    $p->finish;
-
-    $p->each_item(\@items, sub { 
-           # ...
-    });
-
-    # Quicker!
-    my $p = Progress::Awesome->new(100);
-    for (1..100) {
-       do_stuff();
-       $p++;
-    }
-
-# DESCRIPTION
+## Description
 
 Similar to the venerable [Term::ProgressBar](https://metacpan.org/pod/Term::ProgressBar) with several enhancements:
 
@@ -41,119 +27,134 @@ customised.
 size, and won't die if you set the progress bar to its max value when it's already
 reached the max (or for any other reason).
 - Can be incremented using `++` or `+=` if you like.
-- Handy `each_item` and `each_line` functions loop through items/filehandles while
-updating progress.
 - Works fine if max is undefined, set halfway through, or updated halfway through.
 - Estimates ETA with more intelligent prediction than simple linear.
 - Colours!!
-- Multiple process bars at once 'just works'.
+- Multiple process bars at once 'just work'.
 
-# METHODS
+## Methods
 
-## new ( items, %args )
+- new ( %args )
 
-## new ( \\%args )
+    Create a new progress bar. (Arguments may also be passed as a hashref)
 
-Create a new progress bar. It is convenient to pass the number of items and any
-optional arguments, although you may also be explicit and pass a hashref.
+    - items (optional)
 
-XXX not sure about this!
+        Number of items in the progress bar.
 
-- items (optional)
+    - format (default: '\[:bar\] :count/:items :eta :rate')
 
-    Number of items in the progress bar.
+        Specify a format for the progress bar (see ["FORMATS"](#formats) below).
+        The `:bar` part will fill to all available space.
 
-- format (default: '\[:bar\] :count/:items :eta :rate')
+    - style (optional)
 
-    Specify a format for the progress bar (see [FORMATS](https://metacpan.org/pod/FORMATS) below). The `:bar` part will fill to
-    all available space.
+        Specify the bar style. This may be a string ('rainbow' or 'boring') or a function
+        that accepts the percentage and size of the bar (in chars) and returns ANSI data
+        for the bar.
 
-- style (optional)
+    - title (optional)
 
-    Specify the bar style. This may be a string ('rainbow' or 'boring') or a function
-    that accepts the percentage and size of the bar (in chars) and returns ANSI data
-    for the bar.
+        Optional bar title.
 
-- title (optional)
+    - log\_format (default: '\[:ts\] :percent% :count/:items :eta :rate')
 
-    Optional bar title.
+        Specify a format for log output used when the script is run non-interactively.
 
-- log\_format (default: '\[:ts\] :percent% :count/:items :eta :rate')
+    - log (default: 1)
 
-    Specify a format for log output used when the script is run non-interactively.
+        If set to 0, don't log anything when run non-interactively.
 
-- log (default: 1)
+    - color (default: 1)
 
-    If set to 0, don't log anything when run non-interactively.
+        If set to 0, suppress colors when rendering the progress bar.
 
-- color (default: 1)
+    - remove (default: 0)
 
-    If set to 0, suppress colors when rendering the progress bar.
+        If set to 1, remove the progress bar after completion via `finish`.
 
-- remove (default: 0)
+    - fh (default: \\\*STDERR)
 
-    If set to 1, remove the progress bar after completion via `finish`.
+        The filehandle to output to.
 
-- fh (default: \\\*STDERR)
+    - count (default: 0)
 
-    The filehandle to output to.
+        Starting count.
 
-- count (default: 0)
+- update ( value )
 
-    Starting count.
+    Update the progress bar to the specified value. If undefined, the progress bar will go into
+    a spinning/unknown state.
 
-## update ( value )
+- inc ( \[value\] )
 
-Update the progress bar to the specified value. If undefined, the progress bar will go into
-a spinning/unknown state.
+    Increment progress bar by this many items, or 1 if omitted.
 
-## inc ( \[value\] )
+- finish
 
-Increment progress bar by this many items, or 1 if omitted.
+    Set the progress bar to maximum. Any further updates will not take effect. Happens automatically
+    when the progress bar goes out of scope.
 
-## finish
+- items ( \[value\] )
 
-Set the progress bar to maximum. Any further updates will not take effect. Happens automatically
-when the progress bar goes out of scope.
+    Updates the number of items for the progress bar. May be set to undef if unknown. With zero
+    arguments, returns the number of items.
 
-## items ( \[VALUE\] )
+- dec ( \[value\] )
 
-Updates the number of items for the progress bar. May be set to undef if unknown. With zero
-arguments, returns the number of items.
+    Decrement the progress bar by this many items, or 1 if omitted.
 
-## dec ( value )
+## Formats
 
-Decrement the progress bar (if needed).
+Format strings may contain any of the below fields:
 
-## each\_item ( ref, function )
+- :bar
 
-Calls `function` for each item in `ref`. The function will be passed each item (if an array ref)
-or each key and value (if a hash ref). The progress bar will be updated to reflect the progress
-as each item's callback is executed.
+    The progress bar. Expands to fill all available space not used by other fields.
 
-## each\_line ( filename, \[encoding\], function )
+- ::
 
-## each\_line ( filehandle, \[items\], function )
+    Literal ':'
 
-Calls `function` for each line in the given file. If the first argument is a filename, the progress bar
-will automatically update as the file is traversed (like the `pv(1)` tool) based on the byte count.
-If the first argument is a filehandle, only rate and items processed can be shown unless `items` is
-also defined.
+- :ts
 
-# FORMATS
+    Current timestamp (month, day, time) - intended for logging mode.
 
-Blah
+- :count
 
-# REPORTING BUGS
+    Current item count.
 
-TBD
+- :items
 
-# AUTHOR
+    Maximum number of items
+
+- :eta
+
+    Estimated time until progress bar completes.
+
+- :rate
+
+    Number of items being processed per second.
+
+- :bytes
+
+    Number of bytes being processed per second (expressed as KB, MB, GB etc. as needed)
+
+- :percent
+
+    Current percent completion (without % sign)
+
+## Reporting bugs
+
+It's early days for this module so bugs are possible and feature requests are warmly
+welcomed. We use [Github Issues](https://github.com/richardjharris/perl-Progress-Awesome/issues)
+for reports.
+
+## Author
 
 Richard Harris richardjharris@gmail.com
 
-# COPYRIGHT
+## Copyright
 
-Copyright (c) 2017 Richard Harris.  This program is
-free software; you can redistribute it and/or modify it under the same terms
-as Perl itself.
+Copyright (c) 2017 Richard Harris.  This program is free software; you can
+redistribute it and/or modify it under the same terms as Perl itself.
