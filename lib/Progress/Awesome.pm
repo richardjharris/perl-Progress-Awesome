@@ -380,9 +380,9 @@ sub _eta {
 
     # Predict finishing time using current rate
     my $rate = $self->_rate;
-    return 'unknown' if !defined $rate or $rate <= 0;
-
     return 'finished' if $self->{done} >= $self->{total};
+
+    return 'unknown' if !defined $rate or $rate <= 0;
 
     my $duration = ($self->{total} - $self->{done}) / $rate;
     return _human_readable_duration($duration);
