@@ -675,13 +675,17 @@ Multiple process bars at once 'just work'.
 
 =item new ( %args )
 
-Create a new progress bar. (Arguments may also be passed as a hashref)
+=item new ( total, %args )
+
+Create a new progress bar, passing arguments as a hash or hashref. If the first
+argument looks like a number then it will be used as the bar's total number of
+items.
 
 =over
 
 =item total (optional)
 
-Number of total in the progress bar.
+Total number of items to be processed. (items, bytes, files, etc.)
 
 =item format (default: '[:bar] :done/:total :eta :rate')
 
