@@ -3,7 +3,6 @@
 - Don't update too often
 
 - Bytes, items - use predictable sf (and width)
-- if no bar, need something to clear the rest of the screen
 
 - Same with :left, :total, :done - use SF in the same way (maybe?)
 

@@ -263,20 +263,28 @@ sub _redraw_me {
     }
  
     # Work out format length. bar length, and fill in bar
+    my $drew_bar = 0;
+
     if ($format =~ /:bar/) {
         my $remaining_space = $max_width - length($format) + length(':bar');
         if ($remaining_space >= 1) {
             my $bar = $self->{style}->($self->_percent, $remaining_space);
             $format =~ s/:bar/$bar/g; 
+            $drew_bar = 1;
         }
         else {
             # It's already too big
             $format =~ s/:bar//g;
+        }
+    }
 
-            # XXX this needs to account for ANSI codes
-            if (defined $max_width && length($format) > $max_width) {
-                $format = substr($format, 0, $max_width);
-            }
+    if (!$drew_bar && defined $max_width) {
+        # XXX this needs to account for ANSI codes + Unicode double-width
+        if (length($format) > $max_width) {
+            $format = substr($format, 0, $max_width);
+        }
+        else {
+            $format .= ' ' x ($max_width - length($format));
         }
     }
     
