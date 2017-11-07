@@ -18,9 +18,10 @@ For 2.0...
 
  - finish() doesn't actually block changes?
 
- - multiline bars (e.g. [bar] then items on left, eta on right)
-  - would involve :space or similar object that expands to fill
-    all space
-
  - destroy doesn't work 100%. e.g. doesn't consider finished bars to
    be important when moving the cursor down.
+
+ - destroy probably doesn't work with extra-large bars as it only
+   moves down 1 line per bar. But it seems to, somehow.
+
+ - refactor the weird scaling stuff at the end

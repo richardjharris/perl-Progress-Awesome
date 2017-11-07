@@ -157,7 +157,7 @@ sub DESTROY {
         # Unlikely that most method calls will work. The least we can do
         # is move the cursor past our progress bar(s) so the screen is not
         # corrupted.
-        if (defined $self && defined $self->{fh}) {
+        if (defined $self && defined $self->{fh} && !$self->_logging_mode) {
             my $lines = $REGISTRY{$self->{fh}}->{maxbars};
             print {$self->{fh}} "\033[${lines}B";
         }
@@ -230,7 +230,9 @@ sub _redraw {
         print {$self->fh} "\n";
     }
     # Move back up
-    print {$self->fh} "\033[" . $drawn . "A" if $drawn;
+    unless ($self->_logging_mode) {
+        print {$self->fh} "\033[" . $drawn . "A" if $drawn;
+    }
 } 
 
 sub _redraw_me {
@@ -240,14 +242,13 @@ sub _redraw_me {
     return 0 if !$self->{draw_ok};
 
     my ($max_width, $format, $interval);
-    if ($self->_is_interactive) {
+    if ($self->_logging_mode) {
+        $format = $self->log_format . "\n";
+    }
+    else {
         # Drawing a progress bar
         $max_width = $self->_terminal_width;
         $format = $self->format;
-    }
-    else {
-        # Outputting log events
-        $format = $self->log_format . "\n";
     }
     
     # Determine draw interval and don't print if recent enough
@@ -309,7 +310,7 @@ sub _redraw_me {
     }
     $self->fh->flush;
 
-    return $idx; # indicate we drew the bar
+    return scalar @lines; # indicate we drew the bar
 }
     
 sub _redraw_component {
@@ -382,14 +383,15 @@ sub _real_terminal_width {
     return $result;
 }
 
-# Should we display progress bar?
-# Display bar if output is a TTY
-# XXX could use Term::ReadKey instead (width == 0)
-sub _is_interactive {
+# Are we outputting a log instead of a progress bar?
+sub _logging_mode {
     my $self = shift;
-    return $self->{_is_interactive} if exists $self->{_is_interactive};
 
-    return $self->{_is_interactive} = (-t $self->fh);
+    if (exists $self->{_cached_logging_mode}) {
+        return $self->{_cached_logging_mode};
+    }
+
+    $self->{_cached_logging_mode} = (!-t $self->fh);
 }
 
 sub _add_sample {
@@ -623,7 +625,7 @@ sub _unregister_bar {
     @{$data->{bars}} = grep { refaddr $_ ne refaddr $bar } @{$data->{bars}};
 
     # Are we the last bar? Move the cursor to the bottom of the bars.
-    if (@{$data->{bars}} == 0) {
+    if (@{$data->{bars}} == 0 && -t $bar->{fh}) {
         print {$bar->{fh}} "\033[" . $data->{maxbars} . "B";
     }
 }
