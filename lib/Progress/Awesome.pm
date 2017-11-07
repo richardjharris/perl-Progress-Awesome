@@ -524,13 +524,16 @@ sub _unicode_block_bar {
 sub _check_format {
     my ($param, $format) = @_;
     defined $format or croak "format is undefined";
-    
-    while ($format =~ /:(\w+)/g) {
-        exists $FORMAT_STRINGS{$1} or croak "$param: invalid format string ':$1'";
-    }
 
-    if (($format =~ /:bar/) > 1) {
-        croak "$param: contains more than one bar";
+    for my $line (split /\n/, $format) {
+
+        while ($line =~ /:(\w+)/g) {
+            exists $FORMAT_STRINGS{$1} or croak "$param: invalid format string ':$1'";
+        }
+
+        if (($line =~ /:(?:bar|spacer)/) > 1) {
+            croak "$param: contains more than one bar or spacer, this isn't allowed :(";
+        }
     }
 
     return $format;
