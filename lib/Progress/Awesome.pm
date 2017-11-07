@@ -27,26 +27,6 @@ if ($Term::ANSIColor::VERSION < 4.06) {
 # Global bar registry for seamless multiple bars at the same time
 our %REGISTRY;
 
-# TODO rate calculation should look at sample times, reject those
-#      that are too close...
-#
-# TODO unicode support (grapheme awareness / wide characters)
-# TODO colours
-# TODO tests
-# TODO proper numberformatting, fixed sizes for stuff like ETA
-#      e.g. :items should use same space as :count
-#           :eta should have a sensible default min width
-#           :rate also
-#
-# Multiple bars! Should 'just work' (via behind the scenes magic)
-#  - work with regular logs
-#  - try to sync the log size or bar size somehow
-# 
-# Rename 'items' to 'total' perhaps, or something else
-#
-# When decreasing, it might be useful to reverse the rate polarity
-# and not 100% the bar the end. How to detect? Maybe just a 'flip' option
-
 my $DEFAULT_TERMINAL_WIDTH = 80;
 my %FORMAT_STRINGS = map { $_ => 1 } qw(: bar ts count items max eta rate percent);
 my $MAX_SAMPLES = 10;
@@ -102,7 +82,7 @@ sub new {
         croak "Invalid argument: " . join(', ', sort keys %$args);
     }
 
-    # Historic samples uses for rate/ETA calculation
+    # Historic samples used for rate/ETA calculation
     $self->{_samples} = [];
 
     _register_bar($self);
@@ -359,78 +339,6 @@ sub _redraw_me {
 
     return 1; # indicate we drew the bar
 }
-
-sub _style_rainbow {
-    my ($percent, $size) = @_;
-
-    my $rainbow = _ansi_rainbow();
-    if (!defined $percent) {
-        # Render a 100% width gray rainbow instead
-        $percent = 100;
-        $rainbow = _ansi_holding_pattern();
-    }
-
-    my $fillsize = ($size * $percent / 100);
-
-    my $bar = _unicode_block_bar($fillsize);
-    my $len = length $bar;
-    $bar = _color_bar($bar, $rainbow, 10);
-    $bar = encode('UTF-8', $bar);
-
-    return $bar . (' ' x ($size - $len));
-}
-
-sub _style_unicode {
-    my ($percent, $size) = @_;
-
-    my $fillsize = ($size * $percent / 100);
-    my $bar = _unicode_block_bar($fillsize);
-    my $len = length $bar;
-    $bar = encode('UTF-8', $bar);
-
-    return $bar . (' ' x ($size - $len));
-}
-
-sub _unicode_block_bar {
-    my $fillsize = shift;
-    return '' if $fillsize == 0;
-
-    my $intpart = int($fillsize);
-    my $floatpart = $fillsize - $intpart;
-
-    my $whole_block = chr(0x2588);  # full block
-
-    # Block range is U+2588 (full block) .. U+258F (left one eighth block)
-    my $last_block = $floatpart == 0 ? '' : chr(0x2588 + int((1 - $floatpart) * 8));
-
-    return ($whole_block x $intpart) . $last_block;
-}
-
-sub _color_bar {
-    my ($bar, $swatch, $speed) = @_;
-
-    my $t = time * $speed;
-
-    return join('', map {
-        colored(
-            substr($bar, $_ - 1, 1),
-            $swatch->[($_ + $t) % @$swatch],
-        )
-    } (1..length($bar)));
-}
-
-sub _style_simple {
-    my ($percent, $size) = @_;
-    my $bar;
-    if (defined $percent) {
-        my $to_fill = int( $size * $percent / 100 );
-        $bar = ('#' x $to_fill) . (' ' x ($size - $to_fill));
-    }
-    else {
-        $bar = '-' x $size;
-    }
-    return $bar;
-}
     
 sub _redraw_component {
     my ($self, $field) = @_;
@@ -556,6 +464,80 @@ sub _percent {
     return $pc > 100 ? 100 : $pc;
 }
 
+## Bar styles
+
+sub _style_rainbow {
+    my ($percent, $size) = @_;
+
+    my $rainbow = _ansi_rainbow();
+    if (!defined $percent) {
+        # Render a 100% width gray rainbow instead
+        $percent = 100;
+        $rainbow = _ansi_holding_pattern();
+    }
+
+    my $fillsize = ($size * $percent / 100);
+
+    my $bar = _unicode_block_bar($fillsize);
+    my $len = length $bar;
+    $bar = _color_bar($bar, $rainbow, 10);
+    $bar = encode('UTF-8', $bar);
+
+    return $bar . (' ' x ($size - $len));
+}
+
+sub _style_unicode {
+    my ($percent, $size) = @_;
+
+    my $fillsize = ($size * $percent / 100);
+    my $bar = _unicode_block_bar($fillsize);
+    my $len = length $bar;
+    $bar = encode('UTF-8', $bar);
+
+    return $bar . (' ' x ($size - $len));
+}
+
+sub _color_bar {
+    my ($bar, $swatch, $speed) = @_;
+
+    my $t = time * $speed;
+
+    return join('', map {
+        colored(
+            substr($bar, $_ - 1, 1),
+            $swatch->[($_ + $t) % @$swatch],
+        )
+    } (1..length($bar)));
+}
+
+sub _style_simple {
+    my ($percent, $size) = @_;
+    my $bar;
+    if (defined $percent) {
+        my $to_fill = int( $size * $percent / 100 );
+        $bar = ('#' x $to_fill) . (' ' x ($size - $to_fill));
+    }
+    else {
+        $bar = '-' x $size;
+    }
+    return $bar;
+}
+
+sub _unicode_block_bar {
+    my $fillsize = shift;
+    return '' if $fillsize == 0;
+
+    my $intpart = int($fillsize);
+    my $floatpart = $fillsize - $intpart;
+
+    my $whole_block = chr(0x2588);  # full block
+
+    # Block range is U+2588 (full block) .. U+258F (left one eighth block)
+    my $last_block = $floatpart == 0 ? '' : chr(0x2588 + int((1 - $floatpart) * 8));
+
+    return ($whole_block x $intpart) . $last_block;
+}
+
 ## Utilities
 
 # Check format string to ensure it is valid
@@ -641,7 +623,8 @@ sub _ansi_holding_pattern {
     }
 }
 
-# Multiple bar support
+## Multiple bar support
+
 sub _register_bar {
     my $bar = shift;
     my $data = $REGISTRY{$bar->{fh}} ||= {};

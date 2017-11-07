@@ -1,0 +1,20 @@
+- Turn into real distribution
+- POD syntax highlight
+
+- Clean up API
+  - items, count, ???
+  - remove each_line api
+  - standard API: (items, name, \%args)
+  - default style to rainbow?
+
+- Don't update too often
+
+Tests?
+
+For 2.0...
+ - Wide char Unicode support
+ - Colors everywhere
+ - Fixed size formatting, esp. for multiple bars
+ - Handle reversing bars properly
+ - Better rate calculation
+ - other TODOs like bars disappearing at random times or coming back
