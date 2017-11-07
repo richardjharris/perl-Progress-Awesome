@@ -1,7 +1,5 @@
 - Turn into real distribution
 
-- Don't update too often
-
 - Don't use colour in logging mode
   - if bar is included, give it some sensible width
 

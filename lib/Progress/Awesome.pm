@@ -6,7 +6,7 @@ use Carp qw(croak);
 use Devel::GlobalDestruction qw(in_global_destruction);
 use Encode qw(encode);
 use Time::HiRes qw(time);
-use Term::ANSIColor qw(colored);
+use Term::ANSIColor qw(colored uncolor);
 use Scalar::Util qw(refaddr);
 
 use overload
@@ -31,7 +31,7 @@ our %REGISTRY;
 my $REDRAW_INTERVAL = 0;
 
 # Don't log a crazy amount of times
-my $LOG_INTERVAL = 300;
+my $LOG_INTERVAL = 10;
 
 my $DEFAULT_TERMINAL_WIDTH = 80;
 my %FORMAT_STRINGS = map { $_ => 1 } qw(
@@ -280,9 +280,6 @@ sub _redraw_me {
         $format = $self->format;
         $self->{_next_draw} = time + $REDRAW_INTERVAL;
     }
-    
-    # Determine draw interval and don't print if recent enough
-    # (TODO)
 
     my $title_in_format = $format =~ /:title/;
     
@@ -320,7 +317,6 @@ sub _redraw_me {
                 $drew_stretchy = 1;
             }
             else {
-                # It's already too big
                 $format_line =~ s/:spacer//g;
             }
         }
@@ -373,7 +369,7 @@ sub _redraw_component {
         return $self->_eta;
     }
     elsif ($field eq 'rate') {
-        return _human_readable_item_rate($self->_rate);
+        return $self->_percent == 100 ? '-' : _human_readable_item_rate($self->_rate);
     }
     elsif ($field eq 'bytes') {
         return _human_readable_byte_rate($self->_rate);
