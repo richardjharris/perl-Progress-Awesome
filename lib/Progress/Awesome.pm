@@ -29,7 +29,7 @@ our %REGISTRY;
 
 my $DEFAULT_TERMINAL_WIDTH = 80;
 my %FORMAT_STRINGS = map { $_ => 1 } qw(
-    : bar ts eta rate bytes percent done left total
+    : bar ts eta rate bytes percent done left total title
 );
 my $MAX_SAMPLES = 10;
 my @MONTH = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
@@ -252,11 +252,13 @@ sub _redraw_me {
     
     # Determine draw interval and don't print if recent enough
     # (TODO)
+
+    my $title_in_format = $format =~ /:title/;
     
     # Draw the components
     $format =~ s/:(\w+)/$self->_redraw_component($1)/ge;
 
-    if (defined $self->{title}) {
+    if (defined $self->{title} && !$title_in_format) {
         $format = $self->{title} . ": " . $format;
     }
  
@@ -323,6 +325,9 @@ sub _redraw_component {
     elsif ($field eq 'percent') {
         my $pc = $self->_percent;
         return defined $pc ? sprintf('%2.1f', $pc) : '-';
+    }
+    elsif ($field eq 'title') {
+        return $self->{title} || '';
     }
     else {
         die "_redraw_component assert failed: invalid field '$field'";
@@ -798,6 +803,11 @@ Number of bytes being processed per second (expressed as KB, MB, GB etc. as need
 =item :percent
 
 Current percent completion (without % sign)
+
+=item :title
+
+Bar title. Title will be prepended automatically if not included in the
+format string.
 
 =back
 

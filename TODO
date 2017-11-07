@@ -22,3 +22,6 @@ For 2.0...
  - multiline bars (e.g. [bar] then items on left, eta on right)
   - would involve :space or similar object that expands to fill
     all space
+
+ - destroy doesn't work 100%. e.g. doesn't consider finished bars to
+   be important when moving the cursor down.
