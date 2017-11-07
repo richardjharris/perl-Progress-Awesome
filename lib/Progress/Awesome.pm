@@ -162,17 +162,23 @@ sub finish {
 sub DESTROY {
     my $self = shift;
     if (in_global_destruction) {
-        # Unlikely that most method calls will work. The least we can do
-        # is move the cursor past our progress bar(s) so the screen is not
-        # corrupted.
-        if (defined $self && defined $self->{fh} && !$self->_logging_mode) {
-            my $lines = $REGISTRY{$self->{fh}}->{maxbars};
-            print {$self->{fh}} "\033[${lines}B";
-        }
+        # We already handle destruction in the END block for all bars, so
+        # just return
+        return;
     }
     else {
         $self->finish;
     }
+}
+
+END {
+    # Clean up progress bars before global destruction
+    for my $fh (keys %REGISTRY) {
+        for my $bar (_bars_for($fh)) {
+            $bar->finish;
+        }
+    }
+    %REGISTRY = ();
 }
 
 sub total {
