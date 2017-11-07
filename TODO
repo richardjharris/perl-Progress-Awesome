@@ -27,4 +27,9 @@ For 2.0...
  - destroy probably doesn't work with extra-large bars as it only
    moves down 1 line per bar. But it seems to, somehow.
 
+ - seems to go too far down somehow. this happens for both actually
+   OMG
+
  - refactor the weird scaling stuff at the end
+
+ - with 'test', the 'D' bar draws 5 times!
