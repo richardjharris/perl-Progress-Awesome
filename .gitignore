@@ -16,3 +16,4 @@ pod2htm*.tmp
 pm_to_blib
 Progress-Awesome-*
 Progress-Awesome-*.tar.gz
+.sw[op]
