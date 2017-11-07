@@ -1,5 +1,3 @@
-- Turn into real distribution
-
 - Don't use colour in logging mode
   - if bar is included, give it some sensible width
 
@@ -18,6 +16,8 @@ For 2.0...
  - Handle reversing bars properly
  - Better rate calculation
  - other TODOs like bars disappearing at random times or coming back
+
+ - duplicate lines when logging NOOO
 
  - finish() doesn't actually block changes?
 

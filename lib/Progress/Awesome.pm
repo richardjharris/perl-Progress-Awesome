@@ -668,6 +668,8 @@ sub _bars_for {
 
 1;
 
+=pod
+
 =head1 HEAD
 
  Progress::Awesome - an awesome progress bar that just works
