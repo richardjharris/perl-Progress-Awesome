@@ -1,5 +1,7 @@
 - Don't use colour in logging mode
   - if bar is included, give it some sensible width
+  - Don't keep rendering unfinished bars (->finish should stop rendering)
+  - Don't render finished bars either
 
 - Bytes, items - use predictable sf (and width)
 
