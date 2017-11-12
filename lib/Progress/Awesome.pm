@@ -670,7 +670,7 @@ sub _bars_for {
 
 =pod
 
-=head1 HEAD
+=head1 NAME
 
  Progress::Awesome - an awesome progress bar that just works
 
