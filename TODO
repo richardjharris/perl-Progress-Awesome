@@ -7,9 +7,15 @@
 
 - Same with :left, :total, :done - use units in the same way (maybe?)
 
-- Rename to value / max_value ?
+- Fix multibar support
+ - multi script overwrites with 'bar 5' x5, then 20x blank space
+ - `perl test` outputs 1 extra line
 
 Tests?
+
+Maybe for 1.0
+ - rainbow animation based on rate somehow
+ - still if no progress / finished
 
 For 2.0...
  - Wide char Unicode support

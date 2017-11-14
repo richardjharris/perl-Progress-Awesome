@@ -35,8 +35,14 @@ my $LOG_INTERVAL = 10;
 
 my $DEFAULT_TERMINAL_WIDTH = 80;
 my %FORMAT_STRINGS = map { $_ => 1 } qw(
-    : bar ts eta rate bytes percent done left total title spacer
+    : bar ts eta rate bytes percent value max_value title spacer remaining
 );
+my %FORMAT_ALIASES = (
+    '|' => 'spacer',
+    'left' => 'remaining',
+    'max' => 'max_value',
+);
+
 my $MAX_SAMPLES = 10;
 my @MONTH = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
 
@@ -53,7 +59,7 @@ sub new {
     # Map ctor arguments to hashref
     my $args = {};
     if (@_ >= 1 && Scalar::Util::looks_like_number($_[0])) {
-        $args->{total} = shift;
+        $args->{max_value} = shift;
     }
 
     if (@_ == 1 && ref $_[0] && ref $_[0] eq 'HASH') {
@@ -66,24 +72,24 @@ sub new {
     # Apply defaults
     my %defaults = (
         fh => \*STDERR,
-        format => '[:bar] :done/:total :eta :rate',
-        log_format => '[:ts] :percent% :done/:total :eta :rate',
+        format => '[:bar] :value/:max :eta :rate',
+        log_format => '[:ts] :percent% :value/:max :eta :rate',
         log => 1,
         color => 1,
         remove => 0,
         title => undef,
         style => 'rainbow',
-        done => 0,
-        total => undef,
+        value => 0,
+        max_value => undef,
     );  
     $args = { %defaults, %$args };
 
     $self->{fh} = delete $args->{fh};
 
-    $self->update(delete $args->{done}) if exists $args->{done};
+    $self->update(delete $args->{value}) if exists $args->{value};
     
     # Set and validate arguments
-    for my $key (qw(total format log_format log color remove title style)) {
+    for my $key (qw(max_value format log_format log color remove title style)) {
         $self->$key(delete $args->{$key}) if exists $args->{$key};
     }
 
@@ -110,21 +116,21 @@ sub inc {
     @_ == 1 and $amount = 1;
     defined $amount or croak "inc: undefined amount";
 
-    $self->update($self->{done} + $amount);
+    $self->update($self->{value} + $amount);
 }
 
 sub update {
     my ($self, $count) = @_;
     defined $count or croak "update: undefined count";
 
-    if (defined $self->{total} && $count > $self->{total}) {
-        $self->{done} = $self->{total};
+    if (defined $self->{max_value} && $count > $self->{max_value}) {
+        $self->{value} = $self->{max_value};
     }
     elsif ($count < 0) {
-        $self->{done} = 0;
+        $self->{value} = 0;
     }
     else {
-        $self->{done} = $count;
+        $self->{value} = $count;
     }
 
     $self->_add_sample;
@@ -137,15 +143,15 @@ sub dec {
     @_ == 1 and $amount = 1;
     defined $amount or croak "dec undefined amount";
 
-    $self->update($self->{done} - $amount);
+    $self->update($self->{value} - $amount);
 }
 
 sub finish {
     my $self = shift;
 
-    if (defined $self->{total}) {
+    if (defined $self->{max_value}) {
         # Set the bar to maximum
-        $self->update($self->{total});
+        $self->update($self->{max_value});
         $self->_force_redraw;
     }
     
@@ -181,16 +187,16 @@ END {
     %REGISTRY = ();
 }
 
-sub total {
-    my ($self, $total) = @_;
-    @_ == 1 and return $self->{total};
-    if (defined $total) {
-        $total >= 0 or croak "total: total must be undefined or positive (>=0)";
+sub max_value {
+    my ($self, $max_value) = @_;
+    @_ == 1 and return $self->{max_value};
+    if (defined $max_value) {
+        $max_value >= 0 or croak "max_value: max_value must be undefined or positive (>=0)";
     }
-    $self->{total} = $total;
+    $self->{max_value} = $max_value;
 
-    if (defined $total && $self->{done} > $total) {
-        $self->{done} = $total;
+    if (defined $max_value && $self->{value} > $max_value) {
+        $self->{value} = $max_value;
     }
 
     $self->_redraw;
@@ -356,14 +362,15 @@ sub _redraw_component {
         $month = $MONTH[$month] or croak "_redraw_component: unknown month $month ??;";
         return sprintf('%s %02d %02d:%02d:%02d', $month, $day, $hour, $min, $sec);
     }
-    elsif ($field eq 'done') {
-        return $self->{done};
+    elsif ($field eq 'value') {
+        return $self->{value};
     }
-    elsif ($field eq 'left') {
-        return defined $self->{total} ? ($self->{total} - $self->{done}) : '-';
+    elsif ($field eq 'remaining') {
+        my $left = $self->_remaining;
+        return defined $left ? $left : '-';
     }
-    elsif ($field eq 'total' or $field eq 'max') {
-        return defined $self->{total} ? $self->{total} : '-';
+    elsif ($field eq 'max_value') {
+        return defined $self->{max_value} ? $self->{max_value} : '-';
     }
     elsif ($field eq 'eta') {
         return $self->_eta;
@@ -384,6 +391,12 @@ sub _redraw_component {
     else {
         die "_redraw_component assert failed: invalid field '$field'";
     }
+}
+
+sub _remaining {
+    my $self = shift;
+    return if !defined $self->{max_value};
+    return ($self->{max_value} - $self->{value});
 }
 
 sub _wipe_current_line {
@@ -423,7 +436,7 @@ sub _logging_mode {
 sub _add_sample {
     my $self = shift;
     my $s = $self->{_samples};
-    unshift @$s, [$self->{done}, time];
+    unshift @$s, [$self->{value}, time];
     pop @$s if @$s > $MAX_SAMPLES;
 }
 
@@ -433,18 +446,19 @@ sub _eta {
 
     # Predict finishing time using current rate
     my $rate = $self->_rate;
-    return 'finished' if $self->{done} >= $self->{total};
+
+    return 'finished' if defined $rate && $self->{value} >= $self->{max_value};
 
     return 'unknown' if !defined $rate or $rate <= 0;
 
-    my $duration = ($self->{total} - $self->{done}) / $rate;
+    my $duration = $self->_remaining / $rate;
     return _human_readable_duration($duration);
 }
 
 # Return rate for current progress
 sub _rate {
     my $self = shift;
-    return if !defined $self->{total};
+    return if !defined $self->{max_value};
 
     my $s = $self->{_samples};
     return if @$s < 2;
@@ -465,8 +479,8 @@ sub _rate {
 # Return current percentage complete, or undef if unknown
 sub _percent {
     my $self = shift;
-    return undef if !defined $self->{total};
-    my $pc = ($self->{done} / $self->{total}) * 100;
+    return undef if !defined $self->{max_value};
+    my $pc = ($self->{value} / $self->{max_value}) * 100;
     return $pc > 100 ? 100 : $pc;
 }
 
@@ -550,6 +564,13 @@ sub _unicode_block_bar {
 sub _check_format {
     my ($param, $format) = @_;
     defined $format or croak "format is undefined";
+
+    # Map format aliases
+    for my $from (keys %FORMAT_ALIASES) {
+        my $to = $FORMAT_ALIASES{$from};
+
+        $format =~ s/:\Q$from\E/:$to/gsm;
+    }
 
     for my $line (split /\n/, $format) {
 
@@ -683,7 +704,7 @@ sub _bars_for {
  }
 
  # Multiline progress bars
- my $p = Progress::Awesome(100, format => ":bar\n:left/:total :spacer ETA :eta");
+ my $p = Progress::Awesome(100, format => ":bar\n:left/:max :spacer ETA :eta");
 
 =head1 DESCRIPTION
 
@@ -703,7 +724,7 @@ you forget.
 
 =item *
 
-Customisable format includes number of items, item processing rate, file transfer
+Customisable format includes items processed, item processing rate, file transfer
 rate (if items=bytes) and ETA. When non-interactive, logging format can also be
 customised.
 
@@ -741,19 +762,19 @@ Multiple process bars at once 'just work'.
 
 =item new ( %args )
 
-=item new ( total, %args )
+=item new ( max_value, %args )
 
 Create a new progress bar, passing arguments as a hash or hashref. If the first
-argument looks like a number then it will be used as the bar's total number of
+argument looks like a number then it will be used as the bar's maximum number of
 items.
 
 =over
 
-=item total (optional)
+=item max_value (optional)
 
-Total number of items to be processed. (items, bytes, files, etc.)
+Maximum value for the bar (items, bytes, files, etc.)
 
-=item format (default: '[:bar] :done/:total :eta :rate')
+=item format (default: '[:bar] :value/:max_value :eta :rate')
 
 Specify a format for the progress bar (see L</FORMATS> below).
 C<:bar> or C<:spacer> parts will fill to all available space.
@@ -768,7 +789,7 @@ for the bar.
 
 Optional bar title.
 
-=item log_format (default: '[:ts] :percent% :done/:total :eta :rate')
+=item log_format (default: '[:ts] :percent% :value/:max_value :eta :rate')
 
 Specify a format for log output used when the script is run non-interactively.
 
@@ -788,9 +809,9 @@ If set to 1, remove the progress bar after completion via C<finish>.
 
 The filehandle to output to.
 
-=item done (default: 0)
+=item value (default: 0)
 
-Starting number of items done.
+Starting value.
 
 =back
 
@@ -808,10 +829,10 @@ Increment progress bar by this many items, or 1 if omitted.
 Set the progress bar to maximum. Any further updates will not take effect. Happens automatically
 when the progress bar goes out of scope.
 
-=item total ( [value] )
+=item max_value ( [value] )
 
-Updates the total number of items. May be set to undef if unknown. With zero arguments,
-returns the current total.
+Updates the maximum value for the bar. May be set to undef if unknown. With
+zero arguments, returns the current C<max_value>.
 
 =item dec ( [value] )
 
@@ -831,7 +852,7 @@ Format strings may span multiple lines, and may contain any of the below fields:
 
 The progress bar. Expands to fill all available space not used by other fields.
 
-=item :spacer
+=item :spacer, :|
 
 Expands to fill all available space. Items before the spacer will be aligned to
 the left of the screen, and items after the spacer will be aligned to the right.
@@ -845,15 +866,15 @@ Literal ':'
 
 Current timestamp (month, day, time) - intended for logging mode.
 
-=item :done
+=item :value
 
-Number of items that have been completed.
+Current value of the progress bar. (Number of completed items)
 
-=item :left
+=item :left, :remaining
 
 Number of items remaining
 
-=item :total
+=item :max_value, :max
 
 Maximum number of items.
 
