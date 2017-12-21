@@ -5,7 +5,7 @@
 ![Animated gif of progress bar in action](https://i.imgur.com/g2MeL7q.gif)
 
 ```perl
-my $p = Progress::Awesome->new(items => 100, style => 'rainbow');
+my $p = Progress::Awesome->new(100, style => 'rainbow');
 for my $item (1..100) {
     do_some_stuff();
     $p++;
